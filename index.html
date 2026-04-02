@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เช็คพิกัด Wi-Fi / GPS</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        #display { font-size: 1.2rem; margin-bottom: 20px; border: 2px solid #ccc; padding: 20px; border-radius: 10px; }
+        .status { color: blue; font-weight: bold; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+    <h2>พิกัดปัจจุบันของคุณ</h2>
+    
+    <div id="display">
+        <p id="status">กำลังรอรับข้อมูล...</p>
+        <p>Latitude: <span id="lat">-</span></p>
+        <p>Longitude: <span id="lon">-</span></p>
+        <p>Accuracy: <span id="acc">-</span> เมตร</p>
+    </div>
+
+    <button onclick="getLocation()">ดึงพิกัดใหม่ (Refresh)</button>
+
+    <script>
+        const statusText = document.getElementById('status');
+        const latText = document.getElementById('lat');
+        const lonText = document.getElementById('lon');
+        const accText = document.getElementById('acc');
+
+        function getLocation() {
+            if (!navigator.geolocation) {
+                statusText.innerHTML = "เบราว์เซอร์ของคุณไม่รองรับ Geolocation";
+                return;
+            }
+
+            statusText.innerHTML = "กำลังค้นหาตำแหน่ง...";
+            statusText.className = "status";
+
+            // ใช้ watchPosition เพื่อให้ได้ค่าที่แม่นยำขึ้นเรื่อยๆ
+            navigator.geolocation.getCurrentPosition(showPosition, showError, {
+                enableHighAccuracy: true, // บังคับใช้โหมดแม่นยำ (จะใช้ Wi-Fi/GPS ช่วยกัน)
+                timeout: 10000,
+                maximumAge: 0
+            });
+        }
+
+        function showPosition(position) {
+            statusText.innerHTML = "ดึงข้อมูลสำเร็จ!";
+            statusText.className = "";
+            latText.innerHTML = position.coords.latitude;
+            lonText.innerHTML = position.coords.longitude;
+            accText.innerHTML = position.coords.accuracy.toFixed(2);
+        }
+
+        function showError(error) {
+            statusText.className = "error";
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    statusText.innerHTML = "ผู้ใช้ปฏิเสธการเข้าถึงตำแหน่ง (Permission Denied)";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    statusText.innerHTML = "ไม่มีข้อมูลตำแหน่งในขณะนี้";
+                    break;
+                case error.TIMEOUT:
+                    statusText.innerHTML = "การค้นหาใช้เวลานานเกินไป (Timeout)";
+                    break;
+                default:
+                    statusText.innerHTML = "เกิดข้อผิดพลาดไม่ทราบสาเหตุ";
+                    break;
+            }
+        }
+
+        // รันทันทีเมื่อเปิดหน้าเว็บ
+        getLocation();
+    </script>
+
+</body>
+</html>
