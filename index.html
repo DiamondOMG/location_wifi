@@ -3,69 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เช็คพิกัด Wi-Fi / GPS</title>
+    <title>เช็คพิกัด GPS/Wi-Fi Fallback</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; }
-        #display { font-size: 1.2rem; margin-bottom: 20px; border: 2px solid #ccc; padding: 20px; border-radius: 10px; }
-        .status { color: blue; font-weight: bold; }
-        .error { color: red; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f4f4f9; }
+        #display { 
+            font-size: 1.2rem; margin: 20px auto; max-width: 400px;
+            border: 2px solid #ddd; padding: 20px; border-radius: 15px; 
+            background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .status { color: #2196F3; font-weight: bold; margin-bottom: 10px; }
+        .source-tag { font-size: 0.9rem; color: #666; font-style: italic; }
+        .error { color: #f44336; }
+        button { 
+            padding: 10px 25px; font-size: 1rem; cursor: pointer; 
+            background-color: #4CAF50; color: white; border: none; border-radius: 5px;
+        }
+        button:active { background-color: #45a049; }
     </style>
 </head>
 <body>
 
-    <h2>พิกัดปัจจุบันของคุณ</h2>
+    <h2>ระบุตำแหน่งปัจจุบัน</h2>
     
     <div id="display">
-        <p id="status">กำลังรอรับข้อมูล...</p>
-        <p>Latitude: <span id="lat">-</span></p>
-        <p>Longitude: <span id="lon">-</span></p>
+        <p id="status" class="status">เตรียมพร้อม...</p>
+        <p>Latitude: <span id="lat">รอ...</span></p>
+        <p>Longitude: <span id="lon">รอ...</span></p>
         <p>Accuracy: <span id="acc">-</span> เมตร</p>
+        <p id="source" class="source-tag"></p>
     </div>
 
-    <button onclick="getLocation()">ดึงพิกัดใหม่ (Refresh)</button>
+    <button onclick="startLocationSequence()">ดึงพิกัด (GPS -> Wi-Fi)</button>
 
     <script>
         const statusText = document.getElementById('status');
         const latText = document.getElementById('lat');
         const lonText = document.getElementById('lon');
         const accText = document.getElementById('acc');
+        const sourceText = document.getElementById('source');
 
-        function getLocation() {
+        function startLocationSequence() {
             if (!navigator.geolocation) {
-                statusText.innerHTML = "เบราว์เซอร์ของคุณไม่รองรับ Geolocation";
+                statusText.innerHTML = "เบราว์เซอร์ไม่รองรับ Geolocation";
                 return;
             }
 
-            statusText.innerHTML = "กำลังค้นหาตำแหน่ง...";
-            statusText.className = "status";
+            // ล้างค่าเก่า
+            statusText.innerHTML = "กำลังค้นหาด้วย GPS (High Accuracy)...";
+            sourceText.innerHTML = "";
+            latText.innerHTML = "รอ...";
+            lonText.innerHTML = "รอ...";
 
-            // ใช้ watchPosition เพื่อให้ได้ค่าที่แม่นยำขึ้นเรื่อยๆ
-            navigator.geolocation.getCurrentPosition(showPosition, showError, {
-                enableHighAccuracy: true, // บังคับใช้โหมดแม่นยำ (จะใช้ Wi-Fi/GPS ช่วยกัน)
-                timeout: 10000,
-                maximumAge: 0
-            });
+            // STEP 1: พยายามขอ GPS (High Accuracy)
+            navigator.geolocation.getCurrentPosition(
+                (pos) => renderPosition(pos, "จากดาวเทียม (GPS)"), 
+                (err) => {
+                    console.warn("GPS failed or timeout, switching to Wi-Fi/Network...");
+                    tryWiFiFallback();
+                }, 
+                {
+                    enableHighAccuracy: true,
+                    timeout: 5000, // ถ้ารอ GPS เกิน 5 วินาที ให้ข้ามไป Wi-Fi เลย
+                    maximumAge: 0
+                }
+            );
         }
 
-        function showPosition(position) {
+        // STEP 2: ตัวสำรอง ดึงจาก Wi-Fi/Network (ให้ผลเร็วแต่แม่นยำน้อยกว่า)
+        function tryWiFiFallback() {
+            statusText.innerHTML = "GPS ไม่พบสัญญาณ พยายามดึงจาก Wi-Fi...";
+            
+            navigator.geolocation.getCurrentPosition(
+                (pos) => renderPosition(pos, "จากเครือข่าย/Wi-Fi (Network)"),
+                showError, 
+                {
+                    enableHighAccuracy: false, // ปิดโหมดแม่นยำสูงเพื่อให้ใช้ Wi-Fi/Cell Tower
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        function renderPosition(position, source) {
             statusText.innerHTML = "ดึงข้อมูลสำเร็จ!";
-            statusText.className = "";
-            latText.innerHTML = position.coords.latitude;
-            lonText.innerHTML = position.coords.longitude;
+            statusText.className = "status";
+            latText.innerHTML = position.coords.latitude.toFixed(6);
+            lonText.innerHTML = position.coords.longitude.toFixed(6);
             accText.innerHTML = position.coords.accuracy.toFixed(2);
+            sourceText.innerHTML = "แหล่งข้อมูล: " + source;
         }
 
         function showError(error) {
             statusText.className = "error";
             switch(error.code) {
                 case error.PERMISSION_DENIED:
-                    statusText.innerHTML = "ผู้ใช้ปฏิเสธการเข้าถึงตำแหน่ง (Permission Denied)";
+                    statusText.innerHTML = "กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่ง";
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    statusText.innerHTML = "ไม่มีข้อมูลตำแหน่งในขณะนี้";
+                    statusText.innerHTML = "ไม่สามารถระบุตำแหน่งได้ในขณะนี้";
                     break;
                 case error.TIMEOUT:
-                    statusText.innerHTML = "การค้นหาใช้เวลานานเกินไป (Timeout)";
+                    statusText.innerHTML = "การเชื่อมต่อหมดเวลา (Timeout)";
                     break;
                 default:
                     statusText.innerHTML = "เกิดข้อผิดพลาดไม่ทราบสาเหตุ";
@@ -73,8 +111,8 @@
             }
         }
 
-        // รันทันทีเมื่อเปิดหน้าเว็บ
-        getLocation();
+        // เริ่มทำงานทันที
+        startLocationSequence();
     </script>
 
 </body>
